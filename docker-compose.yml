@@ -1,0 +1,34 @@
+name: nifti-qc
+
+services:
+  app:
+    build: .
+    image: nifti-qc:latest
+    ports:
+      # Host port is configurable: NIFTI_HOST_PORT=9000 docker compose up app
+      - "${NIFTI_HOST_PORT:-8080}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+  # One-shot verification: waits for app to be healthy, then runs code tests,
+  # image build validation and API smoke tests.  Its exit code is a bitmask
+  # (1=code tests, 2=image checks, 4=smoke); 0 means everything passed.
+  verify:
+    build: .
+    image: nifti-qc:latest
+    command: ["python", "-m", "verify.verify"]
+    environment:
+      API_BASE_URL: http://app:8000
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: "no"
